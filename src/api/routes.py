@@ -1,4 +1,3 @@
-# Your imports
 import yfinance as yf
 import numpy as np
 from fastapi import FastAPI, HTTPException
@@ -7,9 +6,9 @@ import uvicorn
 import math
 from datetime import datetime, timedelta
 from xgboost import XGBClassifier
-from data_loader import DataLoader
-from feature_engineering import FeatureEngineer
-from model_training import ModelTrainer
+from src.data.loader import DataLoader
+from src.data.preprocessor import FeatureEngineer
+from src.models.trainer import ModelTrainer
 
 
 app = FastAPI(title="Stock Predictor API")
