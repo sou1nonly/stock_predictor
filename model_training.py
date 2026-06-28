@@ -1,45 +1,70 @@
 import pandas as pd
 import numpy as np
-from xgboost import XGBClassifier
+from xgboost import XGBClassifier, XGBRegressor
+from sklearn.linear_model import LinearRegression
 import matplotlib.pyplot as plt
 import seaborn as sns
 import logging
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import numpy as np
 logging.basicConfig(level=logging.INFO)
+# add to main.py after trainer.evaluate(...)
+import matplotlib.pyplot as plt
 logger = logging.getLogger(__name__)
+
+
 
 class ModelTrainer():
     def __init__(self, df: pd.DataFrame):
         self.df = df
 
-        df["target"] = (df["Close"].shift() > df["Close"]).astype(int)
-        y = df["target"]
-        x = df.drop(columns=["Close"])
+        #df["target"] = (df["Close"].shift() > df["Close"]).astype(int)
+        
+        split = int(len(self.df)*0.7)
 
-        logger.info(f"the type of x{type(x)}")
-        logger.info(f"the type of y {type(y)}")
+        self.training = self.df.iloc[:split]
+        self.testing = self.df.iloc[split:]
 
-        self.test_case = x.iloc[-1:]
-        self.x = x.iloc[:-1]
-        self.y = y.iloc[:-1]
+        #classification
+        #feature_cols = [c for c in self.df.columns if c not in ["Date", "Close", "target"]]
+        #target_cols = "target"
 
-        split = int(len(self.x)*0.7)
-        self.X_train = self.x[: split]
-        self.y_train = self.y[: split]
-        self.X_test = self.x[split:]
-        self.y_test = self.y[split:]
+        #regression
+        feature_cols = [c for c in self.df.columns if c not in ["Date", "Close", "Open", "High", "Low"]]
+        target_cols = "Close"
 
-        logger.info(f"the type of x{type(self.x)}")
-        logger.info(f"the type of y {type(self.y)}")
+        print(feature_cols)
 
-        self.model =  XGBClassifier(n_estimators = 150, random_state = 40)
+        self.X_train, self.y_train = self.training[feature_cols], self.training[target_cols]
+        X_test, y_test = self.testing[feature_cols], self.testing[target_cols]
+        
+        self.test_case = X_test.iloc[-1:]
+        self.X_test = X_test[:-1]
+        self.y_test = y_test[:-1]
+
+        #self.model =  XGBClassifier(n_estimators = 150, random_state = 40)
+        self.model = XGBRegressor(learning_rate = 0.1, n_estimators = 1000, random_state = 100)
+        #self.model = LinearRegression(n_jobs=10)
 
 
     def train(self) -> float:
 
         self.model.fit(self.X_train,self.y_train)
         accuracy = self.model.score(self.X_test, self.y_test)
-
-        return accuracy
+        print(f"accuracy: {accuracy}")
+        return {"accuracy": accuracy}
+    
+    def evaluate(self):
+        preds = self.model.predict(self.X_test)
+        mae = mean_absolute_error(self.y_test, preds)
+        rmse = np.sqrt(mean_squared_error(self.y_test, preds))
+        r2 = r2_score(self.y_test, preds)
+        
+        print("\n--- Evaluation Results ---")
+        print(f"MAE:  {mae:.4f}")
+        print(f"RMSE: {rmse:.4f}")
+        print(f"R²:   {r2:.4f}")
+        return {"mae": mae, "rmse": rmse, "r2": r2}
     
     def predict(self) -> str :
         testpred = self.model.predict(self.test_case)
@@ -58,7 +83,19 @@ class ModelTrainer():
         sns.lineplot(data=self.y_test)
         plt.plot()
 
-    
+    def actual_predicted(self):
+        preds = self.model.predict(self.X_test)
+        plt.figure(figsize=(12, 5))
+        plt.plot(self.testing["Date"].iloc[:-1].values, self.y_test.values, label="Actual", color="steelblue")
+        plt.plot(self.testing["Date"].iloc[:-1].values, preds, label="Predicted", color="orange", linestyle="--")
+        plt.title(f" Actual vs Predicted Close Price")
+        plt.xlabel("Date")
+        plt.ylabel("Price (USD)")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig("prediction_plot.png")
+        plt.show()
+        print("[5] Plot saved as prediction_plot.png")
 
 
     

@@ -6,7 +6,7 @@ class FeatureEngineer:
     def __init__(self, df: pd.DataFrame):
         self.df = df
         self.closeprice = df["Close"].to_list()
-        self.features = ["Close"]
+    #    self.features = ["Close"]
 
     #lag1 features:
     def create_lag(self, lag: int) -> pd.DataFrame:
@@ -19,7 +19,7 @@ class FeatureEngineer:
                 final.append(self.closeprice[x-lag])
         
         self.df[f"lag{lag}"] = final
-        self.features.append(f"lag{lag}")
+        #self.features.append(f"lag{lag}")
         return self.df
 
     #rolling mean
@@ -34,7 +34,7 @@ class FeatureEngineer:
                 final.append(np.mean(self.closeprice[i-days+1: i+1]))
 
         self.df[f"rolling{days}"] = final
-        self.features.append(f"rolling{days}")
+        #self.features.append(f"rolling{days}")
         return self.df
 
     #compute RSI
@@ -96,7 +96,7 @@ class FeatureEngineer:
             RSI.append(final)
 
         self.df[f"RSI{period}"] = RSI
-        self.features.append(f"RSI{period}")
+        #self.features.append(f"RSI{period}")
         return self.df
 
     # cyclical_encode
@@ -111,11 +111,11 @@ class FeatureEngineer:
 
     def build(self) -> pd.DataFrame:
         self.create_lag(1)
-        self.create_lag(7)
+        self.create_lag(5)
         self.create_lag(30)
         self.rolling_mean(7)
         self.rolling_mean(30)
         self.compute_rsi()
-        df = self.df[self.features]
-        df = df.dropna()
+   #     df = self.df[self.features]
+        df = self.df.dropna()
         return df  
