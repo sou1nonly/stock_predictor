@@ -1,11 +1,7 @@
-import yfinance as yf
-import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import uvicorn
-import math
-from datetime import datetime, timedelta
-from xgboost import XGBClassifier
+from datetime import datetime
 from src.data.loader import DataLoader
 from src.data.preprocessor import FeatureEngineer
 from src.models.trainer import ModelTrainer
@@ -32,12 +28,12 @@ def stock_data(ticker: str):
         return {"ticker": ticker, "last close price": close[-1], "date range": f"{dates[0]} - {dates[-1]}"}
 
 
-class predictions(BaseModel):
+class PredictionRequest(BaseModel):
     ticker: str
     period: str = "1y"
 
 @app.post("/predict")
-def predict(p: predictions):
+def predict(p: PredictionRequest):
     try:
         loader = DataLoader(p.ticker, p.period)
         df_loaded = loader.yf_cleaned()
@@ -48,6 +44,7 @@ def predict(p: predictions):
         training = ModelTrainer(df_featured)
         accuracy = training.train()
         pred = training.predict()
+        training.predict_accuracy_graph()
 
         return { "ticker": p.ticker, "prediction": pred, "accuracy": accuracy, "number of data points": df_loaded.shape}
     
