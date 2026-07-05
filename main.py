@@ -3,16 +3,23 @@ from src.data.preprocessor import FeatureEngineer
 from src.data.splitter import TimeSeriesSplitter
 from src.models.trainer import ModelTrainer
 from src.models.lstm_model import StockLSTM, LSTMTrainer
+from src.models.versioner import Versioning
 from sklearn.metrics import mean_absolute_error
 from xgboost import XGBRegressor
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
+from datetime import datetime
+torch.manual_seed(42)
+np.random.seed(42)
+
+v = Versioning()
 
 ticker = "AAPL"
 
 # 1. Load data
-loader = DataLoader(ticker, period="10y")
+loader = DataLoader(ticker, period="5y")
 df = loader.yf_cleaned()
 
 # 2. Feature engineering
@@ -22,21 +29,25 @@ f.acf_pacf_plot(lags=40)
 featured_df = f.build()
 print(f"Features shape: {featured_df.shape}")
 
-
 # XGB training
 #training = ModelTrainer(featured_df)
 #training.train()
 #training.predict()
-
 
 # 3. Walk-forward validation
 feature_cols = [c for c in featured_df.columns if c not in [ "Date", "Close", "Open", "High", "Low", "Returns"]]
 x = featured_df[feature_cols].values
 y = featured_df['Returns'].values
 print(feature_cols)
+
 # 4. Scale features 
+split_raw = int(len(x) * 0.8)
 scaler = StandardScaler()
-X_scaled = scaler.fit_transform(x)
+X_train_raw = x[:split_raw]
+X_test_raw = x[split_raw:]
+X_train_scaled = scaler.fit_transform(X_train_raw)  # fit + transform on train
+X_test_scaled = scaler.transform(X_test_raw)         # transform only on test (using train's mean/std)
+X_scaled = np.vstack([X_train_scaled, X_test_scaled])
 
 # 5. Create sequences 
 seq_len = 30 
@@ -50,29 +61,23 @@ def create_sequences(x, y, seq_len):
     
     return np.array(x_seq), np.array(y_seq)
 
-
 X_seq, y_seq = create_sequences(X_scaled, y, seq_len)
 
 #6. Train Test Split
-split = int(len(X_seq) * 0.75)
+split = int(len(X_seq) * 0.8)
 x_train, x_test = X_seq[:split], X_seq[split:]
 y_train, y_test = y_seq[:split], y_seq[split:]
 
 #7. Train the model
 input_size = len(feature_cols)
-model = StockLSTM(input_size=input_size)
-trainer = LSTMTrainer(model=model,lr=0.001)
-trainer.train(X_train=x_train, y_train=y_train, epochs=50)
+lstm_model = StockLSTM(input_size=input_size)
+trainer = LSTMTrainer(model=lstm_model,lr=0.01)
+trainer.train(X_train=x_train, y_train=y_train, epochs=100)
 
 #8. Predict 
 predictions = trainer.predict(x_test)
 
-#9. Results
-plt.plot(y_test)
-plt.plot(predictions)
-plt.savefig('actual vs predicted')
-plt.close()
-
+#XGB trained
 
 xgb_split_idx = split + seq_len
 X_train_xgb = X_scaled[seq_len : xgb_split_idx]
@@ -80,9 +85,19 @@ y_train_xgb = y[seq_len : xgb_split_idx]
 X_test_xgb = X_scaled[xgb_split_idx : ]
 y_test_xgb = y[xgb_split_idx : ]
 # Train and predict
-xgb_model = XGBRegressor(n_estimators=100, random_state=42)
+xgb_model = XGBRegressor(n_estimators=200, random_state=42, colsample_bytree= 0.5)
 xgb_model.fit(X_train_xgb, y_train_xgb)
 xgb_predictions = xgb_model.predict(X_test_xgb)
+
+#feature importances
+importance = xgb_model.feature_importances_
+sorted_idx = np.argsort(importance)
+plt.barh(np.array(feature_cols)[sorted_idx], importance[sorted_idx])
+plt.xlabel("Feature Importance")
+plt.title("XGBoost Feature Importance")
+plt.tight_layout()
+plt.savefig("feature_importance.png")
+plt.close()
 
 # --- Calculate MAE ---
 from sklearn.metrics import mean_absolute_error
@@ -98,6 +113,7 @@ plt.plot(predictions, label="LSTM Predicted", color="blue")
 plt.plot(xgb_predictions, label="XGBoost Predicted", color="red", alpha=0.7)
 plt.legend()
 plt.title("LSTM vs XGBoost Predictions")
+plt.savefig("LSTM vs XGB.png")
 plt.show()
 
 # Directional accuracy: did we get the sign right?
@@ -110,3 +126,34 @@ xgb_dir = directional_accuracy(y_test_xgb, xgb_predictions)
 print(f"LSTM Directional Accuracy: {lstm_dir:.2%}")
 print(f"XGBoost Directional Accuracy: {xgb_dir:.2%}")
 # Random guessing = 50%. Anything above 55% consistently is meaningful.
+
+#saving models
+metadata_XGB = {
+    "version": "v1",
+    "trained_at": f"{datetime.now()}",
+    "ticker": "AAPL",
+    "period": "5y",
+    "features": feature_cols,         
+    "n_features": len(feature_cols),
+    "seq_len": 30,                   
+    "xgb_directional_acc": xgb_dir,
+    "xgb_mae": xgb_mae,
+    "notes": "Added MACD, Bollinger, volume change, price range"
+}
+metadata_LSTM = {
+    "version": "v1",
+    "trained_at": f"{datetime.now()}",
+    "ticker": "AAPL",
+    "period": "5y",
+    "features": feature_cols,   
+    "n_features": len(feature_cols),
+    "seq_len": 30,                    
+    "lstm_directional_acc": lstm_dir,
+    "lstm_mae": lstm_mae,
+    "notes": "Added MACD, Bollinger, volume change, price range"
+}
+
+v.save_xgb(xgb_model, metadata_XGB, version="v1")
+v.save_lstm(lstm_model, metadata_LSTM, version="v1")
+
+v.list_versions()
