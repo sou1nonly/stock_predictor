@@ -1,150 +1,167 @@
 # Stock Predictor
 
-A machine learning-based stock price prediction API built with FastAPI, XGBoost, and yfinance.
+An experimental stock forecasting project built around historical market data, engineered features, and two model families: XGBoost and an LSTM network. The repository includes a Streamlit dashboard for interactive exploration, a FastAPI service for programmatic access, and a small model versioning utility for saved artifacts.
 
-## Overview
+## What It Does
 
-This project predicts stock price movements using historical data and machine learning. It provides a REST API to fetch stock data, generate features, train models, and make predictions.
+The project pulls OHLCV data from Yahoo Finance, builds time-series features such as lag values, rolling means, RSI, MACD, Bollinger band width, and volume change, then trains models to predict next-period returns or direction.
 
-## Features
+It currently supports:
 
-- **Real-time Data Fetching**: Retrieve historical stock data using yfinance
-- **Feature Engineering**: Automatic generation of lag features and technical indicators
-- **Model Training**: XGBoost-based classification model for price movement prediction
-- **REST API**: FastAPI-based endpoint for querying predictions
-- **Health Check**: Built-in health monitoring endpoint
+- Historical data loading through `yfinance`
+- Feature engineering for price, momentum, trend, and volatility signals
+- XGBoost and LSTM training workflows
+- Simple walk-forward backtesting with Sharpe ratio and max drawdown reporting
+- Streamlit visualization for forecasts and analysis
+- FastAPI endpoints for health checks, feature inspection, and prediction requests
+- Model artifact saving with lightweight metadata in `models/`
+
+## Screenshots
+
+These images show the current Streamlit dashboard flow and are included here for quick reference.
+
+### Forecast View
+
+![Forecast view](docs/images/image-1783436513967.png)
+
+### Backtest Results
+
+![Backtest results view](docs/images/image-1783436724033.png)
+
+### Technical Indicators
+
+![Technical indicators view](docs/images/image-1783436628971.png)
+
+### Normalized Price Comparison
+
+![Normalized price comparison](docs/images/image-1783436815696.png)
 
 ## Project Structure
 
 ```
 .
-├── api.py                      # FastAPI application and endpoints
-├── stock_api.py                # Stock data fetching utilities
-├── data_loader.py              # Data loading and preprocessing
-├── feature_engineering.py       # Feature generation and transformation
-├── model_training.py            # Model training and evaluation
-├── requirements.txt             # Python dependencies
-└── README.md                    # This file
+├── main.py
+├── streamlit_app.py
+├── stock_api.py
+├── lstmPractice.ipynb
+├── models/
+│   ├── LSTMv1_meta.json
+│   ├── LSTMv1.pt
+│   └── XGBv1_meta.json
+└── src/
+    ├── api/
+    │   └── routes.py
+    ├── data/
+    │   ├── loader.py
+    │   ├── preprocessor.py
+    │   └── splitter.py
+    ├── models/
+    │   ├── backtester.py
+    │   ├── lstm_model.py
+    │   ├── trainer.py
+    │   └── versioner.py
+    └── utils/
+        └── logger.py
 ```
 
 ## Installation
 
-1. Clone the repository:
+1. Clone the repository.
+2. Create and activate a virtual environment.
+3. Install the required packages.
+
+Example on Windows:
+
 ```bash
 git clone <repository-url>
 cd stock_predictor
+python -m venv .venv
+.venv\Scripts\activate
+pip install -U pip
+pip install fastapi uvicorn yfinance numpy pandas scikit-learn xgboost torch matplotlib seaborn plotly streamlit statsmodels joblib
 ```
 
-2. Create a virtual environment:
+If you prefer, add those dependencies to `requirements.txt` and install from there.
+
+## Running The Apps
+
+### Streamlit Dashboard
+
+Run the interactive dashboard with:
+
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+streamlit run streamlit_app.py
 ```
 
-3. Install dependencies:
+This is the main user-facing app. It lets you choose a ticker, load market data, generate forecasts, and compare model behavior visually.
+
+### FastAPI Service
+
+Start the API with:
+
 ```bash
-pip install -r requirements.txt
+python stock_api.py
 ```
 
-## Dependencies
+By default the app runs on `http://localhost:8015`.
 
-- **fastapi**: Web framework for building APIs
-- **uvicorn**: ASGI server
-- **xgboost**: Gradient boosting machine learning library
-- **yfinance**: Yahoo Finance API wrapper
-- **pydantic**: Data validation using Python type hints
-- **numpy**: Numerical computing
 
-## Usage
+## API Endpoints
 
-### Running the API
+### `GET /health`
 
-Start the development server:
+Returns a simple health response with the current timestamp.
+
+### `GET /stocks/{ticker}`
+
+Fetches the latest one year of data for a ticker and returns the most recent close price plus the date range.
+
+Example:
+
 ```bash
-python api.py
+GET /stocks/AAPL
 ```
 
-The API will be available at `http://localhost:8000`
+### `POST /predict`
 
-### API Endpoints
+Accepts a ticker and period, engineers features, trains an XGBoost model, and returns a prediction, confidence score, and number of rows used.
 
-#### Health Check
-```
-GET /health
-```
-Returns the API status and current timestamp.
+Example payload:
 
-#### Get Stock Data and Predictions
-```
-GET /stocks/{ticker}
-```
-Fetch historical data and predictions for a given stock ticker (e.g., AAPL, MSFT).
-
-**Response Example:**
 ```json
 {
   "ticker": "AAPL",
-  "dates": ["2025-06-23", "2025-06-24"],
-  "close": [150.25, 151.80],
-  "prediction": true
+  "period": "1y"
 }
 ```
 
-### Interactive API Documentation
+### `GET /stocks/{ticker}/features`
 
-Once the server is running, visit:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+Returns the most recent engineered feature rows for inspection.
 
-## How It Works
+## Core Workflow
 
-1. **Data Loading**: `DataLoader` fetches 1 year of historical price data
-2. **Feature Engineering**: `FeatureEngineer` creates lag features for temporal patterns
-3. **Model Training**: `ModelTrainer` trains an XGBoost classifier on historical data
-4. **Prediction**: The API uses the trained model to predict price movements
+1. `DataLoader` downloads OHLCV data from Yahoo Finance.
+2. `FeatureEngineer` derives lag, rolling, and technical indicators.
+3. `ModelTrainer` fits an XGBoost regressor against closing prices.
+4. `StockLSTM` and `LSTMTrainer` provide a PyTorch sequence model alternative.
+5. `BackTester` evaluates a strategy using directional correctness, Sharpe ratio, and drawdown.
+6. `Versioning` persists model artifacts and metadata into `models/`.
 
-## Development
+## Notes On The Current Implementation
 
-### Running Tests
-
-```bash
-pytest tests/
-```
-
-### Code Style
-
-Follow PEP 8 style guidelines. Format with black:
-```bash
-black .
-```
-
-## Performance Considerations
-
-- Model predictions are based on 1 year of historical data
-- Lag features are computed for recent price movements
-- XGBoost handles non-linear relationships in stock price patterns
+- The project is experimental and designed for research and visualization, not live trading.
+- The saved artifacts in `models/` show the current versioned outputs.
+- The repository contains both `main.py` and `stock_api.py`; `stock_api.py` is the cleaner FastAPI entry point.
+- `requirements.txt` is currently empty, so the install command above lists the packages directly.
 
 ## Limitations
 
-- Stock price prediction is inherently uncertain
-- Model performance depends on market conditions and historical patterns
-- Past performance does not guarantee future results
-- Consider this as a reference tool, not financial advice
-
-## Future Enhancements
-
-- [ ] Add multiple stock ticker support
-- [ ] Implement model caching for faster predictions
-- [ ] Add confidence intervals to predictions
-- [ ] Support for longer prediction horizons
-- [ ] Integration with real-time streaming data
-- [ ] Model persistence and versioning
-- [ ] Unit and integration tests
-
-## License
-
-This project is open source and available under the MIT License.
+- Stock prediction is noisy and highly sensitive to regime changes.
+- Backtest results can look stronger than real-world performance due to simplifying assumptions.
+- Some workflows retrain on the fly instead of loading a frozen production model.
+- The codebase is still evolving, so API behavior and dashboard behavior may change.
 
 ## Disclaimer
 
-This project is for educational purposes only. Stock market predictions are speculative and should not be used as sole basis for investment decisions. Always consult with a financial advisor before making investment decisions.
+This project is for educational and research purposes only. It does not provide financial advice, and no result from it should be treated as a recommendation to buy or sell any asset.
