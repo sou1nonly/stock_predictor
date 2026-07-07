@@ -157,3 +157,15 @@ v.save_xgb(xgb_model, metadata_XGB, version="v1")
 v.save_lstm(lstm_model, metadata_LSTM, version="v1")
 
 v.list_versions()
+
+from src.models.backtester import BackTester
+
+bt = BackTester(initial_capital=10000)
+
+xgb_results = bt.run(y_test_xgb, xgb_predictions)
+print(f"XGBoost — Sharpe: {xgb_results['sharpe']:.2f}, Max Drawdown: {xgb_results['max_drawdown']:.2%}, Final Value: ${xgb_results['portfolio'][-1]:.2f}")
+bt.plot(title="xgboost portfolio")
+
+lstm_results = bt.run(y_test, predictions)
+print(f"LSTM — Sharpe: {lstm_results['sharpe']:.2f}, Max Drawdown: {lstm_results['max_drawdown']:.2%}, Final Value: ${lstm_results['portfolio'][-1]:.2f}")
+bt.plot(title="Lstm portfolio")
