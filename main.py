@@ -11,8 +11,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from datetime import datetime
-torch.manual_seed(42)
-np.random.seed(42)
+torch.manual_seed(43)
+np.random.seed(55)
+
 
 v = Versioning()
 
@@ -71,8 +72,8 @@ y_train, y_test = y_seq[:split], y_seq[split:]
 #7. Train the model
 input_size = len(feature_cols)
 lstm_model = StockLSTM(input_size=input_size)
-trainer = LSTMTrainer(model=lstm_model,lr=0.01)
-trainer.train(X_train=x_train, y_train=y_train, epochs=100)
+trainer = LSTMTrainer(model=lstm_model,lr=0.001)
+trainer.train(X_train=x_train, y_train=y_train, epochs=200)
 
 #8. Predict 
 predictions = trainer.predict(x_test)
@@ -85,7 +86,7 @@ y_train_xgb = y[seq_len : xgb_split_idx]
 X_test_xgb = X_scaled[xgb_split_idx : ]
 y_test_xgb = y[xgb_split_idx : ]
 # Train and predict
-xgb_model = XGBRegressor(n_estimators=200, random_state=42, colsample_bytree= 0.5)
+xgb_model = XGBRegressor(n_estimators=150, random_state = 50, colsample_bytree= 0.4)
 xgb_model.fit(X_train_xgb, y_train_xgb)
 xgb_predictions = xgb_model.predict(X_test_xgb)
 

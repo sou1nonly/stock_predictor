@@ -185,14 +185,21 @@ def forecast_xgb(df_raw, featured_df, feat_cols, forecast_days):
     y = featured_df["Returns"].values
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(x)
-    model = XGBRegressor(n_estimators=200, random_state=42, colsample_bytree=0.5)
+    model = XGBRegressor(n_estimators=200, random_state=50, colsample_bytree=0.4)
     model.fit(X_scaled, y)
 
     df = df_raw.copy()
     predicted_prices, predicted_dates = [], []
     for _ in range(forecast_days):
-        fe = FeatureEngineer(df.copy()); fe.to_returns(); feat = fe.build()
+        # Append a dummy row so the preprocessor's shift(1) deposits today's features into it
+        dummy_row = df.iloc[-1:].copy()
+        df_temp = pd.concat([df, dummy_row], ignore_index=True)
+        
+        fe = FeatureEngineer(df_temp.copy())
+        fe.to_returns()
+        feat = fe.build()
         last_row = feat[feat_cols].iloc[-1:].values
+
         pred_ret = model.predict(scaler.transform(last_row))[0]
         last_close = float(df["Close"].iloc[-1])
         new_close = last_close * (1 + pred_ret)
@@ -219,11 +226,18 @@ def forecast_lstm(df_raw, featured_df, feat_cols, forecast_days, seq_len=30):
     lstm_model = StockLSTM(input_size=input_size)
     trainer = LSTMTrainer(model=lstm_model, lr=0.01)
     with redirect_stdout(io.StringIO()):
-        trainer.train(X_train=x_seq, y_train=y_seq, epochs=100)
+        trainer.train(X_train=x_seq, y_train=y_seq, epochs=150)
     df = df_raw.copy(); predicted_prices, predicted_dates = [], []
     for _ in range(forecast_days):
-        fe = FeatureEngineer(df.copy()); fe.to_returns(); feat = fe.build()
+        # Append a dummy row so the preprocessor's shift(1) deposits today's features into it
+        dummy_row = df.iloc[-1:].copy()
+        df_temp = pd.concat([df, dummy_row], ignore_index=True)
+        
+        fe = FeatureEngineer(df_temp.copy())
+        fe.to_returns()
+        feat = fe.build()
         last_seq = feat[feat_cols].iloc[-seq_len:].values
+
         last_scaled = scaler.transform(last_seq)
         tensor = torch.FloatTensor(last_scaled).unsqueeze(0)
         lstm_model.eval()
@@ -250,7 +264,7 @@ def run_backtest(featured_df, feat_cols, model_choice, seq_len=30):
     X_train = scaler.fit_transform(x[:split]); X_test = scaler.transform(x[split:])
     y_train, y_test = y[:split], y[split:]
     if model_choice == "XGBoost":
-        model = XGBRegressor(n_estimators=200, random_state=42, colsample_bytree=0.5)
+        model = XGBRegressor(n_estimators=150, random_state=42, colsample_bytree=0.4)
         model.fit(X_train, y_train); preds = model.predict(X_test)
     else:
         X_all = np.vstack([X_train, X_test]); xs, ys = [], []
@@ -262,7 +276,7 @@ def run_backtest(featured_df, feat_cols, model_choice, seq_len=30):
         yt, yv = ys[:seq_split], ys[seq_split:]
         m = StockLSTM(input_size=len(feat_cols)); t = LSTMTrainer(model=m, lr=0.01)
         with redirect_stdout(io.StringIO()):
-            t.train(X_train=xt, y_train=yt, epochs=100)
+            t.train(X_train=xt, y_train=yt, epochs=150)
         preds = t.predict(xv); y_test = yv
     mae = mean_absolute_error(y_test, preds); d_acc = directional_accuracy(y_test, preds)
     bt = BackTester(initial_capital=10000); res = bt.run(y_test, preds)

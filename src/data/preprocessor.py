@@ -170,19 +170,27 @@ class FeatureEngineer:
 
 
     def build(self) -> pd.DataFrame:
+        # 1. Track original columns so we only shift the newly created features
+        original_cols = list(self.df.columns)
+        
         self.create_lag(1)
         self.create_lag(5)
         self.create_lag(20)
         self.rolling_mean(15)
         self.rolling_mean(30)
         self.compute_rsi()
+        self.addMACD()
         #self.cyclical_encode(col_name='Month', max_value=12)
         #self.cyclical_encode(col_name='DayOfWeek', max_value=7)
-        self.addMACD()
         self.add_bollinger_width(window=20)
-        self.add_volume_change()
+        #self.add_volume_change()
         self.add_price_range()
-   #    df = self.df[self.features]
+        
+        # 2. Identify all new features and shift them by 1 to remove lookahead bias
+        feature_cols = [c for c in self.df.columns if c not in original_cols]
+        self.df[feature_cols] = self.df[feature_cols].shift(1)
+        
+        # 3. Clean up
         self.df.replace([np.inf, -np.inf], np.nan, inplace=True)
         df = self.df.dropna()
         return df  

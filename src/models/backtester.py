@@ -12,11 +12,8 @@ class BackTester():
         strat_returns = 0
 
         for i, j in zip(actual_returns, predicted_returns):
-            if np.sign(i) == np.sign(j):
-                remaining.append(abs(j))
-
-            else:
-                remaining.append(-abs(j))
+            # Position = direction of prediction. Return = actual market return.
+            remaining.append(np.sign(j) * i)
 
         for i in remaining:
             self.capital_change.append(self.capital_change[-1] * (1 + i))
