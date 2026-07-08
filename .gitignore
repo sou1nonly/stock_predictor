@@ -49,3 +49,9 @@ docs/_build/
 
 # folders
 /models
+lstmPractice.ipynb
+stock_api.py
+actual vs predicted.png
+Lstm_portfolio.png
+xgboost_portfolio.png
+.gitignore
